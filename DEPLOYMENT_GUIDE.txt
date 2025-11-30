@@ -1,0 +1,214 @@
+===================================================================
+DEPLOYMENT GUIDE - Cloud Run Deployment
+===================================================================
+
+PREREQUISITES:
+- Completed GCP_SETUP_GUIDE.txt
+- gcloud CLI authenticated
+- Project ID set: gcloud config set project YOUR_PROJECT_ID
+
+===================================================================
+STEP 1: DEPLOY LOG GENERATOR (To populate logs)
+===================================================================
+
+cd log-generator
+
+# Deploy to Cloud Run
+gcloud run deploy log-generator \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 256Mi
+
+# This will:
+# 1. Build the container using Cloud Build
+# 2. Deploy to Cloud Run
+# 3. Return a URL like: https://log-generator-xxx-uc.a.run.app
+
+# Test it:
+curl https://YOUR-LOG-GENERATOR-URL/health
+
+# Generate some logs manually:
+curl https://YOUR-LOG-GENERATOR-URL/generate-error
+
+# The service will also generate logs automatically every 2 minutes
+
+===================================================================
+STEP 2: BUILD AND DEPLOY MAIN BACKEND
+===================================================================
+
+cd ../backend
+
+# Create .env file for production (optional, can use Cloud Run env vars)
+cat > .env << EOF
+GCP_PROJECT_ID=YOUR_PROJECT_ID
+GCP_REGION=us-central1
+USE_MOCK_DATA=false
+GOOGLE_GENAI_API_KEY=YOUR_API_KEY
+EOF
+
+# Deploy to Cloud Run with environment variables
+gcloud run deploy ai-devops-assistant \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --cpu 1 \
+  --timeout 300 \
+  --set-env-vars="GCP_PROJECT_ID=YOUR_PROJECT_ID,GCP_REGION=us-central1,USE_MOCK_DATA=false,GOOGLE_GENAI_API_KEY=YOUR_API_KEY"
+
+# This takes 3-5 minutes
+# Returns URL like: https://ai-devops-assistant-xxx-uc.a.run.app
+
+===================================================================
+STEP 3: CONFIGURE IAM PERMISSIONS
+===================================================================
+
+# Get the service account email (from Cloud Run console or):
+SERVICE_ACCOUNT=$(gcloud run services describe ai-devops-assistant \
+  --region us-central1 \
+  --format="value(spec.template.spec.serviceAccountName)")
+
+echo "Service Account: $SERVICE_ACCOUNT"
+
+# Grant BigQuery permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/bigquery.jobUser"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/bigquery.dataViewer"
+
+# Grant Logging permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/logging.viewer"
+
+# Grant Vertex AI permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:${SERVICE_ACCOUNT}" \
+  --role="roles/aiplatform.user"
+
+===================================================================
+STEP 4: TEST THE DEPLOYMENT
+===================================================================
+
+# Get your Cloud Run URL
+BACKEND_URL=$(gcloud run services describe ai-devops-assistant \
+  --region us-central1 \
+  --format="value(status.url)")
+
+echo "Backend URL: $BACKEND_URL"
+
+# Test health endpoint
+curl $BACKEND_URL/health
+
+# Test the assistant (should return AI response)
+curl -X POST $BACKEND_URL/devAssistant \
+  -H "Content-Type: application/json" \
+  -d '{"data": "Show me recent errors in the system"}'
+
+===================================================================
+STEP 5: UPDATE FRONTEND CONFIGURATION
+===================================================================
+
+# Save your backend URL for the frontend
+echo "NEXT_PUBLIC_API_URL=$BACKEND_URL" > ../frontend/.env.local
+
+# You'll use this URL in the frontend to connect to the backend
+
+cd frontend
+
+# Install Firebase CLI
+npm install -g firebase-tools
+
+# Login
+firebase login
+
+# Initialize
+firebase init hosting
+
+# Select the Google Cloud Platform project you created to add Firebase
+# Choose 'out' as public directory
+# Configure as single-page app: Yes
+# Set up automatic builds: No
+
+# Build
+npm run build
+
+# Deploy
+firebase deploy --only hosting
+
+===================================================================
+TROUBLESHOOTING
+===================================================================
+
+1. "Permission denied" errors:
+   - Wait 1-2 minutes for IAM changes to propagate
+   - Verify service account has correct roles
+
+2. "Table not found" errors:
+   - Log Analytics takes ~1 hour to populate
+   - Use USE_MOCK_DATA=true for immediate testing
+
+3. "Out of memory" errors:
+   - Increase memory: --memory 2Gi
+
+4. Build failures:
+   - Check Cloud Build logs in console
+   - Ensure all dependencies are in package.json
+
+5. Timeout errors:
+   - Increase timeout: --timeout 600
+
+===================================================================
+QUICK REDEPLOY (After code changes)
+===================================================================
+
+# Backend only
+cd backend
+gcloud run deploy ai-devops-assistant \
+  --source . \
+  --region us-central1
+
+# Takes ~2 minutes for incremental builds
+
+===================================================================
+COST OPTIMIZATION
+===================================================================
+
+# Set minimum instances to 0 (default) to avoid charges when idle
+gcloud run services update ai-devops-assistant \
+  --region us-central1 \
+  --min-instances 0
+
+# Set maximum instances to prevent runaway costs
+gcloud run services update ai-devops-assistant \
+  --region us-central1 \
+  --max-instances 10
+
+===================================================================
+MONITORING
+===================================================================
+
+# View logs
+gcloud run services logs read ai-devops-assistant \
+  --region us-central1 \
+  --limit 50
+
+# Or in console:
+# https://console.cloud.google.com/run/detail/us-central1/ai-devops-assistant/logs
+
+===================================================================
+CLEANUP (After demo)
+===================================================================
+
+# Delete services to stop charges
+gcloud run services delete ai-devops-assistant --region us-central1
+gcloud run services delete log-generator --region us-central1
+
+# Delete container images (optional)
+gcloud artifacts docker images delete \
+  us-central1-docker.pkg.dev/YOUR_PROJECT_ID/cloud-run-source-deploy/ai-devops-assistant
+

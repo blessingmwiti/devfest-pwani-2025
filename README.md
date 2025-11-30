@@ -6,39 +6,6 @@ A practical AI assistant that queries production logs to help debug issues. Buil
 
 ---
 
-## PROJECT STRUCTURE
-
-```
-devfestpwani2025/
-├── backend/                    # Genkit backend
-│   ├── src/
-│   │   ├── index.ts           # Main flow & server
-│   │   ├── config.ts          # Configuration
-│   │   └── tools/
-│   │       ├── logTool.ts     # Real BigQuery tool
-│   │       └── mockLogTool.ts # Mock data tool
-│   ├── package.json
-│   ├── tsconfig.json
-│   └── Dockerfile
-│
-├── frontend/                   # Next.js frontend
-│   ├── app/
-│   │   ├── page.tsx           # Main page
-│   │   ├── layout.tsx         # Root layout
-│   │   └── globals.css        # Global styles
-│   ├── components/
-│   │   └── DevAssistantChat.tsx # Chat interface
-│   ├── package.json
-│   └── next.config.js
-│
-├── log-generator/              # Test log generator
-│   ├── index.js
-│   ├── package.json
-│   └── Dockerfile
-```
-
----
-
 ## FEATURES
 
 - ✓ Natural language queries to system logs

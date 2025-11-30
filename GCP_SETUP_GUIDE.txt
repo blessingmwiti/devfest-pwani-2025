@@ -1,0 +1,79 @@
+===================================================================
+CRITICAL: GCP SETUP - DO THIS FIRST (30 MINUTES)
+===================================================================
+
+STEP 1: CREATE GCP PROJECT
+---------------------------
+1. Go to: https://console.cloud.google.com/projectcreate
+2. Project Name: devfest-ai-assistant
+3. Project ID: devfest-ai-assistant-[YOUR-UNIQUE-ID]
+4. Enable Billing (REQUIRED)
+5. Copy your PROJECT_ID - you'll need it!
+
+STEP 2: ENABLE APIS (Run these commands in your terminal)
+----------------------------------------------------------
+# Set your project
+gcloud config set project YOUR_PROJECT_ID
+
+# Enable all required APIs at once
+gcloud services enable \
+  aiplatform.googleapis.com \
+  run.googleapis.com \
+  logging.googleapis.com \
+  bigquery.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com
+
+# This takes about 2-3 minutes
+
+STEP 3: SET UP LOCAL CREDENTIALS
+---------------------------------
+# Authenticate with your Google account
+gcloud auth login
+
+# Set application default credentials (for local development)
+gcloud auth application-default login
+
+# Verify it worked
+gcloud auth list
+
+STEP 4: UPGRADE TO LOG ANALYTICS (CRITICAL - DO NOW!)
+------------------------------------------------------
+*** THIS TAKES 1 HOUR TO START POPULATING DATA ***
+
+1. Go to: https://console.cloud.google.com/logs/storage
+2. Find "_Default" bucket
+3. Under Log Analytics column → "Upgrade"
+
+The BigQuery dataset will be created at:
+  PROJECT_ID.global._Default._AllLogs
+
+STEP 5: GENERATE TEST LOGS (While Log Analytics processes)
+-----------------------------------------------------------
+We'll deploy a simple service that generates test logs.
+This will be done in the next step of the implementation.
+
+STEP 6: VERIFY SETUP
+--------------------
+# Check if APIs are enabled
+gcloud services list --enabled | grep -E "(aiplatform|run|logging|bigquery)"
+
+# Check if you can access BigQuery
+bq ls
+
+# You should see a dataset like: global._Default (after Log Analytics upgrade)
+
+===================================================================
+SAVE THESE VALUES - YOU'LL NEED THEM:
+===================================================================
+PROJECT_ID: _______________________
+REGION: us-central1 (recommended)
+BIGQUERY_TABLE: YOUR_PROJECT_ID.global._Default._AllLogs
+
+===================================================================
+TROUBLESHOOTING
+===================================================================
+- If "gcloud: command not found" → Install: https://cloud.google.com/sdk/docs/install
+- If billing error → Go to console.cloud.google.com/billing
+- If API enable fails → Wait 1 minute and retry
+- If Log Analytics not showing → It takes 1 hour for data to appear
